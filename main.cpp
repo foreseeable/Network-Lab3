@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 #include "inc/common.h"
+
 #undef PROXY_CACHE
 #ifdef PROXY_CACHE
 #include "cache.h"
@@ -22,33 +23,39 @@ struct status_line {
 };
 
 int parseline(char *line, struct status_line *status);
+
 int send_request(rio_t *rio, char *buf, struct status_line *status,
                  int serverfd, int clientfd);
+
 int transmit(int readfd, int writefd, char *buf, int *count
 #ifdef PROXY_CACHE
 ,
              char *objectbuf, int *objectlen
 #endif
 );
+
 int interrelate(int serverfd, int clientfd, char *buf, int idling
 #ifdef PROXY_CACHE
 ,
                 char *objectbuf, struct status_line *status
 #endif
 );
+
 void *proxy(void *vargp);
 
 int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        fprintf(stderr, "usage: %s <port>\n", argv[0]);
+    if (argc != 7 && argc != 8) {
+        fprintf(stderr, "usage: %s <log> <alpha> <listen-port> <fake-ip> <dns-ip> <dns-port> [<www-ip>]\n", argv[0]);
         exit(1);
     }
 
     signal(SIGPIPE, SIG_IGN);
 
-    int port = atoi(argv[1]);
-    int listenfd = Open_listenfd(port);
+    char *logfile = argv[1];
 
+    int listen_port = atoi(argv[3]);
+    int listenfd = Open_listenfd(listen_port);
+    fake_ip = inet_addr(argv[4]);
 #ifdef PROXY_CACHE
     cache_init();
 #endif
@@ -56,7 +63,7 @@ int main(int argc, char *argv[]) {
     while ("serve forever") {
         struct sockaddr clientaddr;
         socklen_t addrlen = sizeof clientaddr;
-        int *clientfd = (int *)Malloc(sizeof(int));
+        int *clientfd = (int *) Malloc(sizeof(int));
         do
             *clientfd = accept(listenfd, &clientaddr, &addrlen);
         while (*clientfd < 0);

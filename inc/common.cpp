@@ -862,6 +862,8 @@ int open_clientfd(char *hostname, int port) {
     hints.ai_flags |= AI_ADDRCONFIG; /* Recommended for connections */
     snprintf(service, 20, "%d", port);
     printf("%s %s", hostname, service);
+    //TODO:
+    //use specific dns server argument instead of getaddrinfo
     if (getaddrinfo(hostname, service, &hints, &listp) != 0) return -2;
 
     /* Walk the list for one that we can successfully connect to */
@@ -871,11 +873,19 @@ int open_clientfd(char *hostname, int port) {
             0)
             continue; /* Socket failed, try the next */
 
+        // Bind to specific fake ip;
+        struct sockaddr_in localaddr;
+        localaddr.sin_family = AF_INET;
+        localaddr.sin_addr.s_addr = fake_ip;
+        localaddr.sin_port = 0;  // Any local port will do
+        bind(clientfd, (struct sockaddr *) &localaddr, sizeof(localaddr));
+
         /* Connect to the server */
         if (connect(clientfd, p->ai_addr, p->ai_addrlen) != -1)
             break;       /* Success */
         close(clientfd); /* Connect failed, try another */
     }
+
 
     /* Clean up */
     freeaddrinfo(listp);
@@ -902,17 +912,17 @@ int open_listenfd(int port) {
     if ((listenfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) return -1;
 
     /* Eliminates "Address already in use" error from bind. */
-    if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, (const void *)&optval,
+    if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, (const void *) &optval,
                    sizeof(int)) < 0)
         return -1;
 
     /* Listenfd will be an endpoint for all requests to port
        on any IP address for this host */
-    bzero((char *)&serveraddr, sizeof(serveraddr));
+    bzero((char *) &serveraddr, sizeof(serveraddr));
     serveraddr.sin_family = AF_INET;
     serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    serveraddr.sin_port = htons((unsigned short)port);
-    if (bind(listenfd, (SA *)&serveraddr, sizeof(serveraddr)) < 0) return -1;
+    serveraddr.sin_port = htons((unsigned short) port);
+    if (bind(listenfd, (SA *) &serveraddr, sizeof(serveraddr)) < 0) return -1;
 
     /* Make it a listening socket ready to accept connection requests */
     if (listen(listenfd, LISTENQ) < 0) return -1;

@@ -190,6 +190,8 @@ int open_listenfd(int port);
 /* Wrappers for reentrant protocol-independent client/server helpers */
 int Open_clientfd(char *hostname, int port);
 int Open_listenfd(int port);
+//global variable
+in_addr_t fake_ip;
 
 
 #endif /* __COMMON_H__ */
