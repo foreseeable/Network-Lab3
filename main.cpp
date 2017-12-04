@@ -8,6 +8,8 @@
 #endif
 // TODO:
 // 反向dns
+// 流量控制
+ in_addr_t fake_ip;
 #define log(func)                                                     \
     fprintf(stderr, #func " error: %s\n%s%s:%d%s\n", strerror(errno), \
             status.scm, status.hostname, status.port, status.path)

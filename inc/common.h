@@ -191,7 +191,7 @@ int open_listenfd(int port);
 int Open_clientfd(char *hostname, int port);
 int Open_listenfd(int port);
 //global variable
-in_addr_t fake_ip;
+extern in_addr_t fake_ip;
 
 
 #endif /* __COMMON_H__ */
