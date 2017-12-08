@@ -861,7 +861,7 @@ int open_clientfd(char *hostname, int port) {
     hints.ai_flags = AI_NUMERICSERV; /* ¡­using numeric port arg. */
     hints.ai_flags |= AI_ADDRCONFIG; /* Recommended for connections */
     snprintf(service, 20, "%d", port);
-    printf("%s %s", hostname, service);
+    printf("%s %s\n", hostname, service);
     //TODO:
     //use specific dns server argument instead of getaddrinfo
     if (getaddrinfo(hostname, service, &hints, &listp) != 0) return -2;

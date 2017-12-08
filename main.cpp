@@ -2,18 +2,7 @@
 #include <stdio.h>
 #include "inc/common.h"
 
-#undef PROXY_CACHE
-#ifdef PROXY_CACHE
-#include "cache.h"
-#endif
 // TODO:
-// 反向dns
-// 流量控制
- in_addr_t fake_ip;
-#define log(func)                                                     \
-    fprintf(stderr, #func " error: %s\n%s%s:%d%s\n", strerror(errno), \
-            status.scm, status.hostname, status.port, status.path)
-
 struct status_line {
     char line[MAXLINE];
     char method[20];
@@ -24,26 +13,34 @@ struct status_line {
     char version[20];
 };
 
+in_addr_t fake_ip,dns_ip;
+double avg; // average throughout
+double alpha;
+int dns_port;
+std::vector<int>Bitrate; //valid Bitrates
+
+int getBitrate(){
+    int bitrate = Bitrate[0];
+    for(auto i:Bitrate)
+        if(i*1.5<avg)
+            bitrate=i;
+    return bitrate;
+}
+
+
 int parseline(char *line, struct status_line *status);
 
 int send_request(rio_t *rio, char *buf, struct status_line *status,
                  int serverfd, int clientfd);
 
 int transmit(int readfd, int writefd, char *buf, int *count
-#ifdef PROXY_CACHE
-,
-             char *objectbuf, int *objectlen
-#endif
 );
 
 int interrelate(int serverfd, int clientfd, char *buf, int idling
-#ifdef PROXY_CACHE
-,
-                char *objectbuf, struct status_line *status
-#endif
 );
 
 void *proxy(void *vargp);
+
 
 int main(int argc, char *argv[]) {
     if (argc != 7 && argc != 8) {
@@ -54,13 +51,15 @@ int main(int argc, char *argv[]) {
     signal(SIGPIPE, SIG_IGN);
 
     char *logfile = argv[1];
-
+    sscanf(argv[2],"%lf",&alpha);   //parse alpha
     int listen_port = atoi(argv[3]);
     int listenfd = Open_listenfd(listen_port);
     fake_ip = inet_addr(argv[4]);
-#ifdef PROXY_CACHE
-    cache_init();
-#endif
+    dns_ip = inet_addr(argv[5]);
+    dns_port = atoi(argv[6]);
+
+
+    FILE* f = fopen("/var/www/vod/big_buck_bunny.f4m","rb");
 
     while ("serve forever") {
         struct sockaddr clientaddr;
@@ -75,11 +74,6 @@ int main(int argc, char *argv[]) {
     }
 }
 
-#ifdef PROXY_CACHE
-int cacheable(struct status_line *status) {
-    return !strcmp(status->method, "GET");
-}
-#endif
 
 int parseline(char *line, struct status_line *status) {
     status->port = 80;
@@ -111,12 +105,14 @@ int send_request(rio_t *rio, char *buf, struct status_line *status,
                                "Connection: close\r\n",
                        status->method, *status->path ? status->path : "/",
                        status->version);
+        printf("%s", buf);
         if ((len = rio_writen(serverfd, buf, len)) < 0) return len;
         while (len != 2) {
             if ((len = rio_readlineb(rio, buf, MAXLINE)) < 0) return len;
             if (memcmp(buf, "Proxy-Connection: ", 18) == 0 ||
                 memcmp(buf, "Connection: ", 12) == 0)
                 continue;
+            printf("%s", buf);
             if ((len = rio_writen(serverfd, buf, len)) < 0) return len;
         }
         if (rio->rio_cnt &&
@@ -131,22 +127,9 @@ int send_request(rio_t *rio, char *buf, struct status_line *status,
 }
 
 int transmit(int readfd, int writefd, char *buf, int *count
-#ifdef PROXY_CACHE
-,
-             char *objectbuf, int *objectlen
-#endif
 ) {
     int len;
     if ((len = read(readfd, buf, MAXBUF)) > 0) {
-#ifdef PROXY_CACHE
-        if (objectbuf && objectlen && *objectlen != -1) {
-            if (*objectlen + len < MAX_OBJECT_SIZE) {
-                memcpy(objectbuf + *objectlen, buf, len);
-                *objectlen += len;
-            } else
-                *objectlen = -1;
-        }
-#endif
         *count = 0;
         len = rio_writen(writefd, buf, len);
     }
@@ -154,10 +137,6 @@ int transmit(int readfd, int writefd, char *buf, int *count
 }
 
 int interrelate(int serverfd, int clientfd, char *buf, int idling
-#ifdef PROXY_CACHE
-,
-                char *objectbuf, struct status_line *status
-#endif
 ) {
     int count = 0;
     int nfds = (serverfd > clientfd ? serverfd : clientfd) + 1;
@@ -166,9 +145,6 @@ int interrelate(int serverfd, int clientfd, char *buf, int idling
     FD_ZERO(&rlist);
     FD_ZERO(&xlist);
 
-#ifdef PROXY_CACHE
-    int objectlen = 0;
-#endif
 
     while (1) {
         count++;
@@ -185,29 +161,19 @@ int interrelate(int serverfd, int clientfd, char *buf, int idling
             if (FD_ISSET(serverfd, &xlist) || FD_ISSET(clientfd, &xlist)) break;
             if (FD_ISSET(serverfd, &rlist) &&
                 ((flag = transmit(serverfd, clientfd, buf, &count
-#ifdef PROXY_CACHE
-                ,
-                                  objectbuf, &objectlen
-#endif
                 )) < 0))
                 return flag;
             if (flag == 0) break;
-            if (FD_ISSET(clientfd, &rlist) &&
-                ((flag = transmit(clientfd, serverfd, buf, &count
-#ifdef PROXY_CACHE
-                ,
-                                  NULL, NULL
-#endif
-                )) < 0))
-                return flag;
+            if (FD_ISSET(clientfd, &rlist)) {
+                if ((flag = transmit(clientfd, serverfd, buf, &count
+                )) < 0)
+                    return flag;
+                printf("%.*s\n", flag, buf);
+            }
             if (flag == 0) break;
         }
         if (count >= idling) break;
     }
-#ifdef PROXY_CACHE
-    if (objectlen > 0 && cacheable(status))
-        cache_add(status->line, objectbuf, objectlen);
-#endif
     return 0;
 }
 
@@ -226,31 +192,19 @@ void *proxy(void *vargp) {
     char buf[MAXLINE];
     int flag;
 
-#ifdef PROXY_CACHE
-    char objectbuf[MAX_OBJECT_SIZE];
-#endif
 
     if ((flag = rio_readlineb(&rio, buf, MAXLINE)) > 0) {
+        printf("%d\n", flag);
+        printf("%.*s\n", flag, buf);
         if (parseline(buf, &status) < 0)
             fprintf(stderr, "parseline error: '%s'\n", buf);
-#ifdef PROXY_CACHE
-            else if (cacheable(&status) &&
-                 (flag = cache_find(status.line, objectbuf))) {
-            if (rio_writen(clientfd, objectbuf, flag) < 0) log(cache_write);
-        }
-#endif
         else if ((serverfd = open_clientfd(status.hostname, status.port)) < 0)
             log(open_clientfd);
         else {
-            if ((flag = send_request(&rio, buf, &status, serverfd, clientfd)) <
-                0)
+            //modify request..
+            if ((flag = send_request(&rio, buf, &status, serverfd, clientfd)) < 0)
                 log(send_request);
-            else if (interrelate(serverfd, clientfd, buf, flag
-#ifdef PROXY_CACHE
-            ,
-                                 objectbuf, &status
-#endif
-            ) < 0)
+            else if (interrelate(serverfd, clientfd, buf, flag) < 0)
                 log(interrelate);
             close(serverfd);
         }
