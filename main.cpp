@@ -41,44 +41,7 @@ int interrelate(int serverfd, int clientfd, char *buf, int idling);
 void *proxy(void *vargp);
 
 int main(int argc, char *argv[]) {
-    /*
-    namespace po = boost::program_options;
-    try {
-        po::options_description desc("Allowed options");
-        desc.add_options()
-                ("help", "produce help message")
-                ("compression", po::value<int>(), "set compression level");
-        po::variables_map vm;
-        po::store(po::parse_command_line(argc, argv, desc), vm);
-        po::notify(vm);
-
-        if (vm.count("help")) {
-            std::cout << desc << std::endl;
-            return 0;
-        }
-
-        if (vm.count("compression")) {
-            std::cout << "Compression level was set to "
-                 << vm["compression"].as<double>() << "."<<std::endl;
-        } else {
-            std::cout << "Compression level was not set."<<std::endl;
-        }
-
-    }
-    catch(std::exception& e){
-        std::cerr << "error: " << e.what() << std::endl;
-    }
-    catch(...) {
-        std::cerr << "Exception of unknown type!\n" <<std::endl;
-    }
-    if (argc != 7 && argc != 8) {
-        fprintf(stderr, "usage: %s <log> <alpha> <listen-port> <fake-ip>
-    <dns-ip> <dns-port> [<www-ip>]\n", argv[0]);
-        exit(1);
-    }
-     */
     signal(SIGPIPE, SIG_IGN);
-
     char *logfile = argv[1];
     sscanf(argv[2], "%lf", &alpha);  // parse alpha
     int listen_port = atoi(argv[3]);
