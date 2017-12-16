@@ -275,6 +275,7 @@ int Open_listenfd(int port);
 
 //global variable
 extern in_addr_t fake_ip;
+extern char* www_ip;
 
 
 #endif /* __COMMON_H__ */

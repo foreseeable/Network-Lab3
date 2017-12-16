@@ -345,7 +345,7 @@ void Fstat(int fd, struct stat *buf) {
  *********************************/
 
 DIR *Opendir(const char *name) {
-    DIR * dirp = opendir(name);
+    DIR *dirp = opendir(name);
 
     if (!dirp)
         unix_error("opendir error");
@@ -855,12 +855,30 @@ int open_clientfd(char *hostname, int port) {
     struct addrinfo hints, *listp, *p;
     char service[20];
 
+    /*
+    if not RR_ADDR
+    RR_ADDR = sendDNSQuery(NAME, INNER_IP, DNS_IP, DNS_PORT)[1]
+            (soc_family, _, _, _, address) = socket.getaddrinfo(RR_ADDR, PORT)[0]
+    self.target = socket.socket(soc_family)
+    self.target.bind((INNER_IP,0))#random.randrange(3000,10000)))
+    self.target.connect(address)
+     */
+
+
     /* Get a list of potential server addresses */
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_socktype = SOCK_STREAM; /* Open a connection */
     hints.ai_flags = AI_NUMERICSERV; /* ¡­using numeric port arg. */
     hints.ai_flags |= AI_ADDRCONFIG; /* Recommended for connections */
-    snprintf(service, 20, "%d", port);
+    snprintf(service, 20, "%d", 8080);
+
+
+    if (www_ip) {
+        hostname = www_ip;
+    } else {
+        //dns not implemented!
+        //hostname = dnsQuery(hostname,fake_ip,dns_ip,dns_port);
+    }
     printf("%s %s\n", hostname, service);
     //TODO:
     //use specific dns server argument instead of getaddrinfo
@@ -878,9 +896,7 @@ int open_clientfd(char *hostname, int port) {
         localaddr.sin_family = AF_INET;
         localaddr.sin_addr.s_addr = fake_ip;
         localaddr.sin_port = 0;  // Any local port will do
-#ifdef VM
         bind(clientfd, (struct sockaddr *) &localaddr, sizeof(localaddr));
-#endif
 
         /* Connect to the server */
         if (connect(clientfd, p->ai_addr, p->ai_addrlen) != -1)
