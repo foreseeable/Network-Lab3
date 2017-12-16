@@ -29,7 +29,10 @@
 #include <chrono>
 #include <vector>
 #include <iostream>
-#include <boost/program_options.hpp>
+#include <functional>
+#include <regex>
+#include <string>
+#undef VM
 
 
 /* Default file permissions are DEF_MODE & ~DEF_UMASK */
