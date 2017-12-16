@@ -878,7 +878,9 @@ int open_clientfd(char *hostname, int port) {
         localaddr.sin_family = AF_INET;
         localaddr.sin_addr.s_addr = fake_ip;
         localaddr.sin_port = 0;  // Any local port will do
+#ifdef VM
         bind(clientfd, (struct sockaddr *) &localaddr, sizeof(localaddr));
+#endif
 
         /* Connect to the server */
         if (connect(clientfd, p->ai_addr, p->ai_addrlen) != -1)
