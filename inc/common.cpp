@@ -2,6 +2,7 @@
 // Created by f on 2017/11/21.
 //
 #include "common.h"
+#include "mydns.h"
 
 /**************************
  * Error-handling functions
@@ -875,14 +876,11 @@ int open_clientfd(char *hostname, int port) {
 
     if (www_ip) {
         hostname = www_ip;
-    } else {
-        //dns not implemented!
-        //hostname = dnsQuery(hostname,fake_ip,dns_ip,dns_port);
     }
     printf("%s %s\n", hostname, service);
     //TODO:
     //use specific dns server argument instead of getaddrinfo
-    if (getaddrinfo(hostname, service, &hints, &listp) != 0) return -2;
+    if (resolve(hostname, service, &hints, &listp) != 0) return -2;
 
     /* Walk the list for one that we can successfully connect to */
     for (p = listp; p; p = p->ai_next) {
@@ -906,7 +904,7 @@ int open_clientfd(char *hostname, int port) {
 
 
     /* Clean up */
-    freeaddrinfo(listp);
+    mydns_freeaddrinfo(listp);
     if (!p) /* All connects failed */
         return -1;
     else /* The last connect succeeded */
@@ -946,7 +944,23 @@ int open_listenfd(int port) {
     if (listen(listenfd, LISTENQ) < 0) return -1;
     return listenfd;
 }
+
+int open_listenfd(in_addr_t ip,int port){
+    int listenfd,optval = 1;
+    struct sockaddr_in serveraddr;
+    if((listenfd=socket(AF_INET,SOCK_DGRAM,0)<0))return -1;
+    bzero((char*)&serveraddr,sizeof serveraddr);
+    serveraddr.sin_family=AF_INET;
+    serveraddr.sin_addr.s_addr = ip;
+    serveraddr.sin_port = port;
+    if(bind(listenfd,(sockaddr*)&serveraddr,sizeof(serveraddr))<0)return -1;
+    if(listen(listenfd,LISTENQ)<0)return -1;
+    return listenfd;
+}
+
 /* $end open_listenfd */
+
+
 
 /****************************************************
  * Wrappers for reentrant protocol-independent helpers
