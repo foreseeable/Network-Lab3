@@ -1,5 +1,7 @@
 
 #include <stdio.h>
+#include <iomanip>
+#include <sstream>
 #include "inc/common.h"
 #include "inc/tinyxml2.h"
 
@@ -19,6 +21,7 @@ double avg;  // average throughout
 double alpha;
 int dns_port;
 double T_cur;
+char *logfile;
 std::vector<int> Bitrate;  // valid Bitrates
 int _Thread_local contentLength;
 
@@ -40,9 +43,24 @@ int interrelate(int serverfd, int clientfd, char *buf, int idling);
 
 void *proxy(void *vargp);
 
+void log(double duration, double tput, int br, in_addr_t server_ip, string chunkname) {
+    auto logFile = fopen(logfile, "a");
+    //<time> <duration> <tput> <avg-tput> <bitrate> <server-ip> <chunkname>
+    auto now = std::chrono::system_clock::now();
+    auto in_time_t = std::chrono::system_clock::to_time_t(now);
+    std::stringstream time_now;
+    time_now << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d %X");
+    //get time formated..
+    fprintf(logFile, "%s %f %f %f %d %s %s\n", time_now.str().c_str(), duration, tput, avg, br,
+            inet_ntoa((in_addr) {server_ip}), chunkname.c_str());
+    printf("%s %f %f %f %d %s %s\n", time_now.str().c_str(), duration, tput, avg, br,
+           inet_ntoa((in_addr) {server_ip}), chunkname.c_str());
+    fclose(logFile);
+}
+
 int main(int argc, char *argv[]) {
     signal(SIGPIPE, SIG_IGN);
-    char *logfile = argv[1];
+    logfile = argv[1];
     sscanf(argv[2], "%lf", &alpha);  // parse alpha
     int listen_port = atoi(argv[3]);
     int listenfd = Open_listenfd(listen_port);
@@ -65,6 +83,7 @@ int main(int argc, char *argv[]) {
     if (doc.ErrorID()) {
         // load f4m file failed!!
         std::cerr << "big_buck_bunny.f4m reading error" << std::endl;
+        return -1;
     }
 
     Bitrate.clear();
@@ -190,13 +209,13 @@ int send_request(rio_t *rio, char *buf, struct status_line *status,
     }
 }
 
-int transmit(int readfd, int writefd, char *buf, int *count){
+int transmit(int readfd, int writefd, char *buf, int *count) {
     int len;
-    char*pos;
+    char *pos;
     if ((len = read(readfd, buf, MAXBUF)) > 0) {
         *count = 0;
-        if((pos=strstr(buf,"Content-Length:"))){
-            sscanf(pos,"Content-Length:%d",&contentLength);
+        if ((pos = strstr(buf, "Content-Length:"))) {
+            sscanf(pos, "Content-Length:%d", &contentLength);
         }
         len = rio_writen(writefd, buf, len);
     }
@@ -261,12 +280,12 @@ void *proxy(void *vargp) {
     int flag;
 
     if ((flag = rio_readlineb(&rio, buf, MAXLINE)) > 0) {
-        printf("%d\n", flag);
-        printf("%.*s\n", flag, buf);
+        //printf("%d\n", flag);
+        //printf("%.*s\n", flag, buf);
         if (parseline(buf, &status) < 0)
             fprintf(stderr, "parseline error: '%s'\n", buf);
         else if ((serverfd = open_clientfd(const_cast<char *>(status.hostname.c_str()),
-                                        status.port)) < 0);  // log(open_clientfd);
+                                           status.port)) < 0);  // log(open_clientfd);
         else {
             // modify request..
             auto req_start = std::chrono::system_clock::now();
@@ -275,15 +294,21 @@ void *proxy(void *vargp) {
                 0);  //    log(send_request);
             else if (interrelate(serverfd, clientfd, buf, flag) < 0);
             else {
-                auto req_end = std::chrono::system_clock::now();
-                std::chrono::duration<double> diff = req_end - req_start;
-                double duration = diff.count(); //seconds
-                double T_new = contentLength/duration;
-                avg = alpha*avg +(1-alpha)*T_new;
-              //  double T_new = ;
-                //𝑇 = 𝛼𝑇 + (1 − 𝛼)𝑇 (1) 𝑐𝑢𝑟𝑟𝑒𝑛𝑡 𝑛𝑒𝑤 𝑐𝑢𝑟𝑟𝑒𝑛𝑡
+                auto pos = status.path.find("Seg");
+                if (pos != std::string::npos) {
+                    //video segment file request
+                    int br = getBitrate();
+                    auto req_end = std::chrono::system_clock::now();
+                    std::chrono::duration<double> diff = req_end - req_start;
+                    double duration = diff.count(); //seconds
+                    double T_new = 8*contentLength / duration/1000;
+                    avg = alpha * avg + (1 - alpha) * T_new;
+                    //throughout update
+                    //logging
+                    //暂时不知道ip所以就这样吧。。
+                    log(duration, T_new, br, 0, status.path);
+                }
             }
-            //   log(interrelate);
             close(serverfd);
         }
     }
