@@ -22,6 +22,7 @@ double alpha;
 int dns_port;
 double T_cur;
 char *logfile;
+char *www_ip;
 std::vector<int> Bitrate;  // valid Bitrates
 int _Thread_local contentLength;
 
@@ -59,6 +60,10 @@ void log(double duration, double tput, int br, in_addr_t server_ip, string chunk
 }
 
 int main(int argc, char *argv[]) {
+    if (argc != 7 && argc != 8) {
+        fprintf(stderr, "usage: %s <log> <alpha> <listen-port> <fake-ip> <dns-ip> <dns-port> [<www-ip>]\n", argv[0]);
+        exit(1);
+    }
     signal(SIGPIPE, SIG_IGN);
     logfile = argv[1];
     sscanf(argv[2], "%lf", &alpha);  // parse alpha
@@ -67,7 +72,9 @@ int main(int argc, char *argv[]) {
     fake_ip = inet_addr(argv[4]);
     dns_ip = inet_addr(argv[5]);
     dns_port = atoi(argv[6]);
-
+    if (argc == 8) {
+        www_ip = argv[7];
+    } else www_ip = NULL;
     FILE *f;
 #ifdef VM
     f = fopen("/var/www/vod/big_buck_bunny.f4m", "rb");
@@ -129,23 +136,25 @@ int parseline(char *line, struct status_line *status) {
     char _path[MAXLINE];
     char _version[20];
 
-    if (sscanf(line, "%s %[a-z]://%[^/]%s %s", _method, _scm, _hostname, _path,
-               _version) != 5) {
-        if (sscanf(line, "%s %s %s", _method, _hostname, _version) != 3)
-            return -1;
-        status->method = _method;
-        status->hostname = _hostname;
-        status->version = _version;
-        status->scm = status->path = "";
-    } else {
-        status->method = _method;
-        status->hostname = _hostname;
-        status->version = _version;
-        status->path = _path;
-        status->scm = _scm;
-        status->scm += "://";
+
+    if (sscanf(line, "%s %s %s", _method, _hostname, _version) != 3)
+        return -1;
+    status->method = _method;
+    status->version = _version;
+    status->hostname = _hostname;
+
+    auto pos = status->hostname.find("://");
+    if (pos != std::string::npos) {
+        status->scm = status->hostname.substr(0, pos);
+        status->hostname = status->hostname.substr(pos + 3);
     }
-    auto pos = status->hostname.find(':');
+    pos = status->hostname.find("/");
+    if (pos != std::string::npos) {
+        status->path = status->hostname.substr(pos);
+        status->hostname = status->hostname.substr(0, pos);
+    }
+
+    pos = status->hostname.find(':');
     if (pos != std::string::npos) {
         status->port = std::stoi(status->hostname.substr(pos + 1));
         status->hostname = status->hostname.substr(0, pos);
@@ -281,7 +290,7 @@ void *proxy(void *vargp) {
 
     if ((flag = rio_readlineb(&rio, buf, MAXLINE)) > 0) {
         //printf("%d\n", flag);
-        //printf("%.*s\n", flag, buf);
+        printf("%.*s\n", flag, buf);
         if (parseline(buf, &status) < 0)
             fprintf(stderr, "parseline error: '%s'\n", buf);
         else if ((serverfd = open_clientfd(const_cast<char *>(status.hostname.c_str()),
@@ -301,7 +310,7 @@ void *proxy(void *vargp) {
                     auto req_end = std::chrono::system_clock::now();
                     std::chrono::duration<double> diff = req_end - req_start;
                     double duration = diff.count(); //seconds
-                    double T_new = 8*contentLength / duration/1000;
+                    double T_new = 8 * contentLength / duration / 1000;
                     avg = alpha * avg + (1 - alpha) * T_new;
                     //throughout update
                     //logging
