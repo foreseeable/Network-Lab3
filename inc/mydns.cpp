@@ -24,26 +24,6 @@ int init_mydns(const char *dns_ip, unsigned int dns_port, const char *client_ip)
     return connect(dns_socket, (SA *) &dns_addr, sizeof dns_addr);
 }
 
-struct DNSHeader {
-    unsigned int ID :16;
-    unsigned int QR :1;
-    unsigned int OPCODE :4;
-    unsigned int AA :1;
-    unsigned int TC :1;
-    unsigned int RD :1;
-    unsigned int RA :1;
-    unsigned int Z :3;
-
-    unsigned int RCODE :4;
-    unsigned int QDCOUNT :16;
-    unsigned int ANCOUNT :16;
-    unsigned int NSCOUNT :16;
-    unsigned int ARCOUNT :16;
-};
-struct DNSQuery {
-    unsigned int QTYPE:16;
-    unsigned int QCLASS:16;
-};
 
 
 int resolve(const char *node, const char *service,
@@ -121,11 +101,7 @@ int resolve(const char *node, const char *service,
                     }
                     QNAME_p+=10;
                     //skip RR_TYPE RR_CLASS RR_TTL RR_DL
-                    std::string ipstr="";
-                    ipstr.append(std::to_string(*QNAME_p++));
-                    ipstr.append(std::to_string(*QNAME_p++));
-                    ipstr.append(std::to_string(*QNAME_p++));
-                    ipstr.append(std::to_string(*QNAME_p++));
+                    in_addr_t ip = ntohl(*(in_addr_t*)QNAME_p);
                     *res =new addrinfo;
                     (*res)->ai_family=AF_INET;
                     (*res)->ai_socktype = SOCK_STREAM; /* Open a connection */
@@ -134,7 +110,8 @@ int resolve(const char *node, const char *service,
                     sockaddr_in*addr=(sockaddr_in*)(*res)->ai_addr;
                     addr->sin_family=AF_INET;
                     addr->sin_port=atoi(service);
-                    inet_aton(ipstr.c_str(),&(addr->sin_addr));
+                    addr->sin_addr.s_addr=ip;
+                    //inet_aton(ipstr.c_str(),&(addr->sin_addr));
                     (*res)->ai_addrlen = sizeof(sockaddr);
                     (*res)->ai_next = NULL;
                     (*res)->ai_canonname = NULL;

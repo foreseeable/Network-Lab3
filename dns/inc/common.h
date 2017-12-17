@@ -1,4 +1,3 @@
-
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
@@ -295,20 +294,16 @@ ssize_t Rio_readnb(rio_t *rp, void *usrbuf, size_t n);
 ssize_t Rio_readlineb(rio_t *rp, void *usrbuf, size_t maxlen);
 
 /* Reentrant protocol-independent client/server helpers */
-int open_clientfd(char *hostname, int port);
 
 int open_listenfd(int port);
 
 int open_listenfd(in_addr_t ip, int port);
 
 /* Wrappers for reentrant protocol-independent client/server helpers */
-int Open_clientfd(char *hostname, int port);
 
 int Open_listenfd(int port);
 
 //global variable
-extern in_addr_t fake_ip;
-extern char *www_ip;
 
 
 #endif /* __COMMON_H__ */

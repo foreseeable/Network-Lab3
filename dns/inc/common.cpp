@@ -2,13 +2,6 @@
 // Created by f on 2017/11/21.
 //
 #include "common.h"
-#include "mydns.h"
-
-/**************************
- * Error-handling functions
- **************************/
-/* $begin errorfuns */
-/* $begin unixerror */
 void unix_error(const char *msg) /* Unix-style error */
 {
     fprintf(stderr, "%s: %s\n", msg, strerror(errno));
@@ -851,60 +844,6 @@ ssize_t Rio_readlineb(rio_t *rp, void *usrbuf, size_t maxlen) {
  */
 /* $begin open_clientfd */
 
-int open_clientfd(char *hostname, int port) {
-    int clientfd;
-    struct addrinfo hints, *listp, *p;
-    char service[20];
-
-    /*
-    if not RR_ADDR
-    RR_ADDR = sendDNSQuery(NAME, INNER_IP, DNS_IP, DNS_PORT)[1]
-            (soc_family, _, _, _, address) = socket.getaddrinfo(RR_ADDR, PORT)[0]
-    self.target = socket.socket(soc_family)
-    self.target.bind((INNER_IP,0))#random.randrange(3000,10000)))
-    self.target.connect(address)
-     */
-
-
-    /* Get a list of potential server addresses */
-    memset(&hints, 0, sizeof(struct addrinfo));
-    hints.ai_socktype = SOCK_STREAM; /* Open a connection */
-    hints.ai_flags = AI_NUMERICSERV; /* ¡­using numeric port arg. */
-    hints.ai_flags |= AI_ADDRCONFIG; /* Recommended for connections */
-    snprintf(service, 20, "%d", 8080);
-
-
-    if (www_ip) {
-        hostname = www_ip;
-    } else {
-        //dns not implemented!
-        //hostname = dnsQuery(hostname,fake_ip,dns_ip,dns_port);
-        struct addrinfo *result;
-        int rc = resolve("video.pku.edu.cn", "8080", NULL, &result);
-        if (rc != 0) {
-            return -2;
-        }
-        // connect to address in result
-        p = result;
-        if ((clientfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) < 0)
-            return -1;
-
-        // Bind to specific fake ip;
-        struct sockaddr_in localaddr;
-        localaddr.sin_family = AF_INET;
-        localaddr.sin_addr.s_addr = fake_ip;
-        localaddr.sin_port = 0;  // Any local port will do
-        bind(clientfd, (struct sockaddr *) &localaddr, sizeof(localaddr));
-
-        /* Connect to the server */
-        if (connect(clientfd, p->ai_addr, p->ai_addrlen) != -1) {
-            return clientfd;
-        }
-        mydns_freeaddrinfo(result);
-    }
-    printf("%s %s\n", hostname, service);
-    return -1;
-}
 /* $end open_clientfd */
 
 /*
@@ -941,22 +880,23 @@ int open_listenfd(int port) {
 }
 /* $end open_listenfd */
 
+int open_listenfd(in_addr_t ip,int port){
+    int listenfd,optval = 1;
+    struct sockaddr_in serveraddr;
+    if((listenfd=socket(AF_INET,SOCK_DGRAM,0)<0))return -1;
+    bzero((char*)&serveraddr,sizeof serveraddr);
+    serveraddr.sin_family=AF_INET;
+    serveraddr.sin_addr.s_addr = ip;
+    serveraddr.sin_port = port;
+    if(bind(listenfd,(sockaddr*)&serveraddr,sizeof(serveraddr))<0)return -1;
+    if(listen(listenfd,LISTENQ)<0)return -1;
+    return listenfd;
+}
 
 /****************************************************
  * Wrappers for reentrant protocol-independent helpers
  ****************************************************/
 
-int Open_clientfd(char *hostname, int port) {
-    int rc;
-
-    if ((rc = open_clientfd(hostname, port)) < 0) {
-        if (rc == -1)
-            unix_error("Open_clientfd Unix error");
-        else
-            dns_error("Open_clientfd DNS error");
-    }
-    return rc;
-}
 
 int Open_listenfd(int port) {
     int rc;
